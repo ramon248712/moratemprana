@@ -134,7 +134,7 @@ if (preg_match('/\b\d{1,2}\.?\d{3}\.?\d{3}\b/', $message, $coinc)) {
         $respuesta = getFrasePersonalizada($telefonoConPrefijo, $encontrado["nombre"], $encontrado["deuda"]);
         registrarVisita($telefonoConPrefijo);
     } else {
-        $respuesta = "Hola. No encontramos deuda con ese DNI. ¿Podrías verificar si está bien escrito?";
+        $respuesta = "Disculpe, no encontramos deuda con ese DNI. ¿Podrías verificar si está bien escrito?";
     }
 } else {
     $deudor = buscarDeudor($telefonoConPrefijo);
@@ -149,10 +149,10 @@ if (preg_match('/\b\d{1,2}\.?\d{3}\.?\d{3}\b/', $message, $coinc)) {
         $respuesta = respuestaPorCategoria("cuotas");
     } elseif (contiene($message, ["sin trabajo", "no tengo trabajo", "sin empleo", "desempleado", "desocupado"])) {
         $respuesta = respuestaPorCategoria("sintrabajo");
-    } elseif (contiene($message, ["no anda la app", "no puedo entrar", "Naranja X no funciona", "no puedo ingresar", "Naranja X no me deja", "Naranja X no abre", "Naranja X no carga"])) {
+    } elseif (contiene($message, ["no anda la app", "no puedo entrar", "no funciona", "no puedo ingresar", "no me deja", "no abre", "no carga"])) {
         $respuesta = respuestaPorCategoria("problemaapp");
     } elseif (contiene($message, ["pague", "saldada", "no debo", "ingresé", "pagué", "no devo"])) {
-        $respuesta = "En las próximas horas actualizaremos nuestros registros. Guíese por el saldo en la app de Naranja X";
+        $respuesta = "En las próximas horas actualizaremos nuestros registros. Guíese por el saldo en la app";
     } elseif ($deudor) {
         if (!yaSaludoHoy($telefonoConPrefijo)) {
             $respuesta = getFrasePersonalizada($telefonoConPrefijo, $deudor["nombre"], $deudor["deuda"]);
@@ -165,7 +165,7 @@ if (preg_match('/\b\d{1,2}\.?\d{3}\.?\d{3}\b/', $message, $coinc)) {
         if (empty($message) || strlen($contenidoLimpio) < 3) {
             $respuesta = respuestaPorCategoria("urgencia");
         } else {
-            $respuesta = "Hola. ¿Podrías indicarnos tu DNI para identificarte?";
+            $respuesta = "Hola. ¿Podrías indicarnos tu DNI (sin puntos) para identificarte?";
         }
     }
 }
