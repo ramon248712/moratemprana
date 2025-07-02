@@ -1,175 +1,121 @@
 <?php
-// Configuración general
+// CONFIGURACION GENERAL
 ini_set('display_errors', 0);
 ini_set('display_startup_errors', 0);
 error_reporting(0);
-date_default_timezone_set("America/Argentina/Buenos_Aires");
+date_default_timezone_set('America/Argentina/Buenos_Aires');
 header('Content-Type: application/json');
 
-// Capturar datos
-$app = $_POST["app"] ?? "";
-$sender = preg_replace('/\D/', '', $_POST["sender"] ?? "");
-$message = strtolower(trim($_POST["message"] ?? ""));
+// MENSAJE DEL CLIENTE
+$input = json_decode(file_get_contents('php://input'), true);
+$mensaje = strtolower(trim($input['mensaje'] ?? ''));
+$telefono = trim($input['telefono'] ?? '');
+$nombreArchivo = 'clientes_mora_temprana.csv';
+$logFile = 'interacciones_mora.csv';
+$reporteFile = 'reporte_chats.csv';
 
-if (strlen($sender) < 10) exit(json_encode(["reply" => ""]));
-$telefonoBase = substr($sender, -10);
-$telefonoConPrefijo = "+549" . $telefonoBase;
-
-function saludoHora() {
-    $h = (int)date("H");
-    if ($h >= 6 && $h < 12) return "Buen día";
-    if ($h >= 12 && $h < 19) return "Buenas tardes";
-    return "Buenas noches";
-}
-
-function contiene($msg, $palabras) {
-    foreach ($palabras as $p) {
-        if (strpos($msg, $p) !== false) return true;
-    }
-    return false;
-}
-
-function registrarVisita($telefono) {
-    $visitas = [];
-    if (file_exists("visitas.csv")) {
-        foreach (file("visitas.csv") as $linea) {
-            [$tel, $fecha] = str_getcsv($linea);
-            $visitas[$tel] = $fecha;
+// FUNCIONES AUXILIARES
+function buscarCliente($telefono, $archivo) {
+    if (!file_exists($archivo)) return null;
+    $csv = array_map('str_getcsv', file($archivo));
+    foreach ($csv as $linea) {
+        if (isset($linea[2]) && limpiarNumero($linea[2]) === limpiarNumero($telefono)) {
+            return [
+                'nombre' => $linea[0],
+                'dni' => $linea[1],
+                'telefono' => $linea[2],
+            ];
         }
     }
-    $visitas[$telefono] = date("Y-m-d");
-    $fp = fopen("visitas.csv", "w");
-    foreach ($visitas as $tel => $fecha) fputcsv($fp, [$tel, $fecha]);
-    fclose($fp);
-}
-
-function yaSaludoHoy($telefono) {
-    if (!file_exists("visitas.csv")) return false;
-    foreach (file("visitas.csv") as $linea) {
-        [$tel, $fecha] = str_getcsv($linea);
-        if ($tel === $telefono && $fecha === date("Y-m-d")) return true;
-    }
-    return false;
-}
-
-function buscarDeudor($telefono) {
-    if (!file_exists("deudores.csv")) return null;
-    $fp = fopen("deudores.csv", "r");
-    $telBase = substr(preg_replace('/\D/', '', $telefono), -10);
-    while (($line = fgetcsv($fp, 0, ";")) !== false) {
-        if (count($line) >= 4) {
-            $telCsv = substr(preg_replace('/\D/', '', $line[2]), -10);
-            if ($telCsv === $telBase) {
-                fclose($fp);
-                return ["nombre" => $line[0], "dni" => $line[1], "telefono" => $line[2], "deuda" => $line[3]];
-            }
-        }
-    }
-    fclose($fp);
     return null;
 }
 
-function cargarFrases($archivo) {
-    return file_exists($archivo) ? array_map("trim", file($archivo)) : [];
+function limpiarNumero($numero) {
+    return preg_replace('/\D+/', '', $numero);
 }
 
-function getFrasePersonalizada($telefono, $nombre, $monto) {
-    $archivo = "uso_frases.json";
-    $frases = cargarFrases("frases_iniciales.txt");
-    $usadas = file_exists($archivo) ? json_decode(file_get_contents($archivo), true) : [];
-
-    if (!isset($usadas[$telefono])) $usadas[$telefono] = [];
-    $pendientes = array_diff($frases, $usadas[$telefono]);
-
-    if (empty($pendientes)) {
-        $usadas[$telefono] = [];
-        $pendientes = $frases;
-    }
-
-    $frase = $pendientes[array_rand($pendientes)];
-    $usadas[$telefono][] = $frase;
-    file_put_contents($archivo, json_encode($usadas));
-
-    return strtr($frase, [
-        "{saludo}" => saludoHora(),
-        "{nombre}" => mb_convert_case($nombre, MB_CASE_TITLE, "UTF-8"),
-        "{monto}" => "$" . $monto
-    ]);
+function registrarInteraccion($telefono) {
+    $fecha = date('Y-m-d');
+    $hora = date('H:i:s');
+    file_put_contents('interacciones_mora.csv', "$telefono;$fecha;$hora\n", FILE_APPEND);
 }
 
-function respuestaPorCategoria($categoria) {
-    $archivo = "frases_{$categoria}.txt";
-    $frases = cargarFrases($archivo);
-    return $frases ? $frases[array_rand($frases)] : "";
+function registrarReporte($dni, $telefono, $detalle) {
+    $linea = "$dni;$telefono;$detalle\n";
+    file_put_contents('reporte_chats.csv', "$dni;" . "$detalle (Tel: $telefono)
+", FILE_APPEND);
 }
 
-$respuesta = "";
+function menuPrincipalSinValidar() {
+    return "Hola, soy Carla del equipo de cobranzas de Naranja X. Para continuar necesito saber si estoy hablando con el titular de la cuenta. Por favor confirmalo para avanzar con la información.";
+}
 
-if (preg_match('/\b\d{1,2}\.?\d{3}\.?\d{3}\b/', $message, $coinc)) {
-    $dni = preg_replace('/\D/', '', $coinc[0]);  // elimina puntos
-    $fp = fopen("deudores.csv", "r");
-    $lineas = [];
-    $encontrado = null;
+function menuPrincipalConfirmado($nombre) {
+    return "Hola $nombre, gracias por confirmar que sos el titular. Tu tarjeta presenta una deuda en instancia prelegal. Elegí una opción para avanzar:\n\n1. Ver medios de pago\n2. Conocer plan disponible\n3. Ya pagué\n4. No reconozco la deuda";
+}
 
-    while (($line = fgetcsv($fp, 0, ";")) !== false) {
-        if (count($line) >= 4) {
-            if (trim($line[1]) == $dni) {
-                $line[2] = $telefonoConPrefijo;
-                $encontrado = ["nombre" => $line[0], "dni" => $line[1], "deuda" => $line[3]];
-            }
-            $lineas[] = $line;
-        }
-    }
-    fclose($fp);
+function subMenuPago() {
+    return "Podés abonar por:\n- App Naranja X\n- Home Banking (Link / Banelco)\n- Pago Fácil / Cobro Express / Rapipago\n- CBU o débito automático\n
+Recordá que siempre se sumarán intereses en el resumen del mes siguiente.\n
+Por favor, verificá tus datos personales en la app (domicilio, teléfono y mail).";
+}
 
-    if ($encontrado) {
-        $fp = fopen("deudores.csv", "w");
-        foreach ($lineas as $l) fputcsv($fp, $l, ";");
-        fclose($fp);
+function subMenuPlanes() {
+    return "Estás en instancia prelegal. Podés acceder al *Plan de Pago Total* o *Plan Excepción*, que financia toda la deuda pendiente.\n\n- El plástico queda inhabilitado hasta abonar el 60% del plan.\n- Los datos ya fueron informados al Banco Central.\n- Los débitos están suspendidos.\n- Siempre se aplicarán intereses en el próximo resumen.\n\nRecordá revisar en la app que tus datos personales estén actualizados (domicilio, teléfono y mail).";
+}
 
-        $fp = fopen("modificaciones.csv", "a");
-        fputcsv($fp, ["asociar", $telefonoConPrefijo, $dni]);
-        fclose($fp);
+function respuestaPagado() {
+    return "🙌 Gracias por informarlo. Indicá por favor:\n- Monto pagado\n- Medio de pago\n- Fecha\nAsí actualizamos nuestros registros.\nTené en cuenta que podrían verse reflejados intereses en el próximo resumen.";
+}
 
-        $respuesta = getFrasePersonalizada($telefonoConPrefijo, $encontrado["nombre"], $encontrado["deuda"]);
-        registrarVisita($telefonoConPrefijo);
-    } else {
-        $respuesta = "Disculpe, no encontramos deuda con ese DNI. ¿Podrías verificar si está bien escrito?";
-    }
+function respuestaNoReconoce() {
+    return "Si no reconocés la deuda, podés iniciar un reclamo. Contactanos para más información.";
+}
+
+// LOGICA PRINCIPAL
+$cliente = buscarCliente($telefono, $nombreArchivo);
+
+if (!$cliente) {
+    echo json_encode(['respuesta' => "Hola. Para poder ayudarte, por favor escribí tu DNI (solo números)."]);
+    exit;
+}
+
+registrarInteraccion($telefono);
+
+$esTitular = strpos($mensaje, 'soy el titular') !== false || strpos($mensaje, 'si soy') !== false || strpos($mensaje, 'soy yo') !== false || strpos($mensaje, 'habla el titular') !== false;
+
+if (!$esTitular && !in_array($mensaje, ['1', '2', '3', '4'])) {
+    $respuesta = menuPrincipalSinValidar();
+} elseif (!$esTitular && in_array($mensaje, ['1', '2', '3', '4'])) {
+    $respuesta = "Necesito que primero confirmes si sos el titular de la cuenta para poder darte información.";
 } else {
-    $deudor = buscarDeudor($telefonoConPrefijo);
-    if (contiene($message, ["equivocado", "no soy", "falleció", "fallecido", "murió", "número equivocado"])) {
-        $fp = fopen("modificaciones.csv", "a");
-        fputcsv($fp, ["eliminar", $telefonoConPrefijo]);
-        fclose($fp);
-        $respuesta = "Ok, disculpe";
-    } elseif (contiene($message, ["gracia", "gracias", "graciah"])) {
-        $respuesta = respuestaPorCategoria("gracias");
-    } elseif (contiene($message, ["cuota", "cuotas", "refinanciar", "refinanciación", "plan", "acuerdo"])) {
-        $respuesta = respuestaPorCategoria("cuotas");
-    } elseif (contiene($message, ["sin trabajo", "no tengo trabajo", "sin empleo", "desempleado", "desocupado"])) {
-        $respuesta = respuestaPorCategoria("sintrabajo");
-    } elseif (contiene($message, ["no anda la app", "no puedo entrar", "no funciona", "no puedo ingresar", "no me deja", "no abre", "no carga"])) {
-        $respuesta = respuestaPorCategoria("problemaapp");
-    } elseif (contiene($message, ["pague", "saldada", "no debo", "ingresé", "pagué", "no devo"])) {
-        $respuesta = "En las próximas horas actualizaremos nuestros registros. Guíese por el saldo en la app";
-    } elseif ($deudor) {
-        if (!yaSaludoHoy($telefonoConPrefijo)) {
-            $respuesta = getFrasePersonalizada($telefonoConPrefijo, $deudor["nombre"], $deudor["deuda"]);
-            registrarVisita($telefonoConPrefijo);
-        } else {
-            $respuesta = respuestaPorCategoria("urgencia");
-        }
-    } else {
-        $contenidoLimpio = trim(preg_replace('/[^a-z0-9áéíóúñ ]/i', '', $message));
-        if (empty($message) || strlen($contenidoLimpio) < 3) {
-            $respuesta = respuestaPorCategoria("urgencia");
-        } else {
-            $respuesta = "Hola, podrías indicarnos tu DNI (sin puntos) para identificarte? ";
-        }
+    switch ($mensaje) {
+        case '1':
+        case 'ver medios de pago':
+            $respuesta = subMenuPago();
+            registrarReporte($cliente['dni'], $cliente['telefono'], date('Y-m-d H:i:s') . ' - $1');
+            break;
+        case '2':
+        case 'conocer plan disponible':
+            $respuesta = subMenuPlanes();
+            registrarReporte($cliente['dni'], $cliente['telefono'], 'El número de teléfono solicitó conocer plan disponible.');
+            break;
+        case '3':
+        case 'ya pague':
+        case 'ya pagué':
+            $respuesta = respuestaPagado();
+            registrarReporte($cliente['dni'], $cliente['telefono'], 'El número de teléfono manifestó que ya realizó el pago.');
+            break;
+        case '4':
+        case 'no reconozco la deuda':
+            $respuesta = respuestaNoReconoce();
+            registrarReporte($cliente['dni'], $cliente['telefono'], 'El número de teléfono indicó que no reconoce la deuda.');
+            break;
+        default:
+            $respuesta = menuPrincipalConfirmado($cliente['nombre']);
+            break;
     }
 }
 
-file_put_contents("historial.txt", date("Y-m-d H:i") . " | $sender => $message\n", FILE_APPEND);
-echo json_encode(["reply" => $respuesta]);
+echo json_encode(['respuesta' => $respuesta]);
 exit;
