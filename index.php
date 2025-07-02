@@ -42,8 +42,7 @@ function registrarInteraccion($telefono) {
 
 function registrarReporte($dni, $telefono, $detalle) {
     $linea = "$dni;$telefono;$detalle\n";
-    file_put_contents('reporte_chats.csv', "$dni;" . "$detalle (Tel: $telefono)
-", FILE_APPEND);
+    file_put_contents('reporte_chats.csv', "$dni;" . "$detalle (Tel: $telefono)\n", FILE_APPEND);
 }
 
 function menuPrincipalSinValidar() {
@@ -55,9 +54,7 @@ function menuPrincipalConfirmado($nombre) {
 }
 
 function subMenuPago() {
-    return "Podés abonar por:\n- App Naranja X\n- Home Banking (Link / Banelco)\n- Pago Fácil / Cobro Express / Rapipago\n- CBU o débito automático\n
-Recordá que siempre se sumarán intereses en el resumen del mes siguiente.\n
-Por favor, verificá tus datos personales en la app (domicilio, teléfono y mail).";
+    return "Podés abonar por:\n- App Naranja X\n- Home Banking (Link / Banelco)\n- Pago Fácil / Cobro Express / Rapipago\n- CBU o débito automático\n\nRecordá que siempre se sumarán intereses en el resumen del mes siguiente.\n\nPor favor, verificá tus datos personales en la app (domicilio, teléfono y mail).";
 }
 
 function subMenuPlanes() {
@@ -76,7 +73,7 @@ function respuestaNoReconoce() {
 $cliente = buscarCliente($telefono, $nombreArchivo);
 
 if (!$cliente) {
-    echo json_encode(['respuesta' => "Hola. Para poder ayudarte, por favor escribí tu DNI (solo números)."]);
+    echo json_encode(['reply' => "Hola. Para poder ayudarte, por favor escribí tu DNI (solo números)."], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
@@ -117,5 +114,5 @@ if (!$esTitular && !in_array($mensaje, ['1', '2', '3', '4'])) {
     }
 }
 
-echo json_encode(['reply' => $respuesta]);
+echo json_encode(['reply' => $respuesta], JSON_UNESCAPED_UNICODE);
 exit;
