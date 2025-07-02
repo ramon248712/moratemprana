@@ -1,24 +1,28 @@
 <?php
-// CONFIGURACION GENERAL
+// CONFIGURACIÓN GENERAL
 ini_set('display_errors', 0);
 ini_set('display_startup_errors', 0);
 error_reporting(0);
 date_default_timezone_set('America/Argentina/Buenos_Aires');
-header('Content-Type: application/json');
+header('Content-Type: application/json; charset=utf-8');
 
-// MENSAJE DEL CLIENTE
+// CAPTURA DEL MENSAJE ENVIADO DESDE WHATSAUTO
 $input = json_decode(file_get_contents('php://input'), true);
 $mensaje = strtolower(trim($input['mensaje'] ?? ''));
 $telefono = trim($input['telefono'] ?? '');
-$nombreArchivo = 'clientes_mora_temprana.csv';
-$logFile = 'interacciones_mora.csv';
-$reporteFile = 'reporte_chats.csv';
+$archivoClientes = 'clientes_mora_temprana.csv';
+$archivoInteracciones = 'interacciones_mora.csv';
+$archivoReporte = 'reporte_chats.csv';
 
 // FUNCIONES AUXILIARES
+function limpiarNumero($numero) {
+    return preg_replace('/\D+/', '', $numero);
+}
+
 function buscarCliente($telefono, $archivo) {
     if (!file_exists($archivo)) return null;
-    $csv = array_map('str_getcsv', file($archivo));
-    foreach ($csv as $linea) {
+    $lineas = array_map('str_getcsv', file($archivo));
+    foreach ($lineas as $linea) {
         if (isset($linea[2]) && limpiarNumero($linea[2]) === limpiarNumero($telefono)) {
             return [
                 'nombre' => $linea[0],
@@ -30,10 +34,6 @@ function buscarCliente($telefono, $archivo) {
     return null;
 }
 
-function limpiarNumero($numero) {
-    return preg_replace('/\D+/', '', $numero);
-}
-
 function registrarInteraccion($telefono) {
     $fecha = date('Y-m-d');
     $hora = date('H:i:s');
@@ -41,8 +41,9 @@ function registrarInteraccion($telefono) {
 }
 
 function registrarReporte($dni, $telefono, $detalle) {
-    $linea = "$dni;$telefono;$detalle\n";
-    file_put_contents('reporte_chats.csv', "$dni;" . "$detalle (Tel: $telefono)\n", FILE_APPEND);
+    $fechaHora = date('Y-m-d H:i:s');
+    $linea = "$dni;$telefono;$fechaHora;$detalle\n";
+    file_put_contents('reporte_chats.csv', $linea, FILE_APPEND);
 }
 
 function menuPrincipalSinValidar() {
@@ -58,7 +59,7 @@ function subMenuPago() {
 }
 
 function subMenuPlanes() {
-    return "Estás en instancia prelegal. Podés acceder al *Plan de Pago Total* o *Plan Excepción*, que financia toda la deuda pendiente.\n\n- El plástico queda inhabilitado hasta abonar el 60% del plan.\n- Los datos ya fueron informados al Banco Central.\n- Los débitos están suspendidos.\n- Siempre se aplicarán intereses en el próximo resumen.\n\nRecordá revisar en la app que tus datos personales estén actualizados (domicilio, teléfono y mail).";
+    return "Estás en instancia prelegal. Podés acceder al *Plan de Pago Total* o *Plan Excepción*, que financia toda la deuda pendiente.\n\n- El plástico queda inhabilitado hasta abonar el 60% del plan.\n- Los datos ya fueron informados al Banco Central.\n- Los débitos están suspendidos.\n- Siempre se aplicarán intereses en el próximo resumen.\n\nRecordá revisar en la app que tus datos personales estén actualizados.";
 }
 
 function respuestaPagado() {
@@ -69,9 +70,10 @@ function respuestaNoReconoce() {
     return "Si no reconocés la deuda, podés iniciar un reclamo. Contactanos para más información.";
 }
 
-// LOGICA PRINCIPAL
-$cliente = buscarCliente($telefono, $nombreArchivo);
+// PROCESO PRINCIPAL
+$cliente = buscarCliente($telefono, $archivoClientes);
 
+// SI NO ESTÁ EN EL CSV, PEDIMOS EL DNI
 if (!$cliente) {
     echo json_encode(['reply' => "Hola. Para poder ayudarte, por favor escribí tu DNI (solo números)."], JSON_UNESCAPED_UNICODE);
     exit;
@@ -79,7 +81,10 @@ if (!$cliente) {
 
 registrarInteraccion($telefono);
 
-$esTitular = strpos($mensaje, 'soy el titular') !== false || strpos($mensaje, 'si soy') !== false || strpos($mensaje, 'soy yo') !== false || strpos($mensaje, 'habla el titular') !== false;
+$esTitular = strpos($mensaje, 'soy el titular') !== false ||
+             strpos($mensaje, 'si soy') !== false ||
+             strpos($mensaje, 'soy yo') !== false ||
+             strpos($mensaje, 'habla el titular') !== false;
 
 if (!$esTitular && !in_array($mensaje, ['1', '2', '3', '4'])) {
     $respuesta = menuPrincipalSinValidar();
@@ -90,23 +95,23 @@ if (!$esTitular && !in_array($mensaje, ['1', '2', '3', '4'])) {
         case '1':
         case 'ver medios de pago':
             $respuesta = subMenuPago();
-            registrarReporte($cliente['dni'], $cliente['telefono'], date('Y-m-d H:i:s') . ' - $1');
+            registrarReporte($cliente['dni'], $cliente['telefono'], 'Solicitó medios de pago');
             break;
         case '2':
         case 'conocer plan disponible':
             $respuesta = subMenuPlanes();
-            registrarReporte($cliente['dni'], $cliente['telefono'], 'El número de teléfono solicitó conocer plan disponible.');
+            registrarReporte($cliente['dni'], $cliente['telefono'], 'Solicitó plan disponible');
             break;
         case '3':
         case 'ya pague':
         case 'ya pagué':
             $respuesta = respuestaPagado();
-            registrarReporte($cliente['dni'], $cliente['telefono'], 'El número de teléfono manifestó que ya realizó el pago.');
+            registrarReporte($cliente['dni'], $cliente['telefono'], 'Indicó que ya pagó');
             break;
         case '4':
         case 'no reconozco la deuda':
             $respuesta = respuestaNoReconoce();
-            registrarReporte($cliente['dni'], $cliente['telefono'], 'El número de teléfono indicó que no reconoce la deuda.');
+            registrarReporte($cliente['dni'], $cliente['telefono'], 'No reconoce la deuda');
             break;
         default:
             $respuesta = menuPrincipalConfirmado($cliente['nombre']);
