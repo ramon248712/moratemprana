@@ -117,5 +117,5 @@ if (!$esTitular && !in_array($mensaje, ['1', '2', '3', '4'])) {
     }
 }
 
-echo json_encode(['respuesta' => $respuesta]);
+echo json_encode(['reply' => $respuesta]);
 exit;
