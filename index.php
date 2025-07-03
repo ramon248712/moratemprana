@@ -15,8 +15,9 @@ if (strlen($senderBase) != 10) {
 }
 
 // Archivos
-$csvFile       = __DIR__ . '/deudores.csv';
-$reporteChats  = __DIR__ . '/reporte_chats.csv';
+$csvFile            = __DIR__ . '/deudores.csv';
+$reporteChats       = __DIR__ . '/reporte_chats.csv';
+$titularesFile      = __DIR__ . '/titulares_confirmados.csv';
 
 // Cargar deudores
 $clientes = [];
@@ -44,21 +45,39 @@ foreach ($clientes as $c) {
 
 // Si no se encuentra el cliente, pedir el DNI
 if (!$cliente) {
-    echo json_encode(["reply" => "Hola. Para poder ayudarte, por favor escribí tu DNI (solo números)."], JSON_UNESCAPED_UNICODE);
+    echo json_encode([
+        "reply" => "Hola. Para poder ayudarte, por favor escribí tu DNI (solo números). Si sos el titular, escribí: *Si soy*"
+    ], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
-// Ver si confirmó titularidad
-$esTitular = strpos($message, 'soy el titular') !== false ||
-             strpos($message, 'si soy') !== false ||
-             strpos($message, 'soy yo') !== false ||
-             strpos($message, 'habla el titular') !== false;
+// Verificar confirmación previa de titularidad
+$titularesConfirmados = [];
+if (file_exists($titularesFile)) {
+    $lines = file($titularesFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    foreach ($lines as $line) {
+        $titularesConfirmados[] = trim($line);
+    }
+}
+$yaConfirmado = in_array($senderBase, $titularesConfirmados);
+
+// Ver si el mensaje actual confirma titularidad
+$esTitularAhora = strpos($message, 'soy el titular') !== false ||
+                  strpos($message, 'si soy') !== false ||
+                  strpos($message, 'soy yo') !== false ||
+                  strpos($message, 'habla el titular') !== false;
+
+// Guardar confirmación si es necesario
+if ($esTitularAhora && !$yaConfirmado) {
+    file_put_contents($titularesFile, $senderBase . "\n", FILE_APPEND);
+    $yaConfirmado = true;
+}
 
 $opciones = ['1', '2', '3', '4'];
 
 // Funciones de respuesta
 function menuSinConfirmar() {
-    return "Hola, soy Carla del equipo de cobranzas de Naranja X. Para continuar necesito saber si estoy hablando con el titular de la cuenta. Por favor confirmalo para avanzar con la información.";
+    return "Hola, soy Carla del equipo de cobranzas de Naranja X. Para continuar necesito saber si estoy hablando con el titular de la cuenta. Por favor escribí: *Si soy* para avanzar.";
 }
 function menuConfirmado($nombre) {
     return "Hola $nombre, gracias por confirmar que sos el titular. Tu tarjeta presenta una deuda en instancia prelegal. Elegí una opción para avanzar:\n\n1. Ver medios de pago\n2. Conocer plan disponible\n3. Ya pagué\n4. No reconozco la deuda";
@@ -84,11 +103,11 @@ function registrarReporte($dni, $telefono, $detalle) {
 }
 
 // Reglas de flujo
-if (!$esTitular && in_array($message, $opciones)) {
-    echo json_encode(["reply" => "Necesito que primero confirmes si sos el titular de la cuenta para poder darte información."], JSON_UNESCAPED_UNICODE);
+if (!$yaConfirmado && in_array($message, $opciones)) {
+    echo json_encode(["reply" => "Necesito que primero confirmes si sos el titular de la cuenta para poder darte información. Por favor escribí: *Si soy*"], JSON_UNESCAPED_UNICODE);
     exit;
 }
-if (!$esTitular && !in_array($message, $opciones)) {
+if (!$yaConfirmado && !in_array($message, $opciones)) {
     echo json_encode(["reply" => menuSinConfirmar()], JSON_UNESCAPED_UNICODE);
     exit;
 }
