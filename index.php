@@ -2,24 +2,21 @@
 date_default_timezone_set("America/Argentina/Buenos_Aires");
 header('Content-Type: application/json; charset=utf-8');
 
-// Obtener datos desde WhatsAuto
 $app     = $_POST["app"] ?? '';
 $sender  = preg_replace('/\D/', '', $_POST["sender"] ?? '');
 $message = strtolower(trim($_POST["message"] ?? ''));
 $senderBase = substr($sender, -10);
 
-// Validar teléfono
 if (strlen($senderBase) != 10) {
     echo json_encode(["reply" => ""]);
     exit;
 }
 
-// Archivos
-$csvFile            = __DIR__ . '/deudores.csv';
-$reporteChats       = __DIR__ . '/reporte_chats.csv';
-$titularesFile      = __DIR__ . '/titulares_confirmados.csv';
+$csvFile       = __DIR__ . '/deudores.csv';
+$reporteChats  = __DIR__ . '/reporte_chats.csv';
+$titularesFile = __DIR__ . '/titulares_confirmados.csv';
 
-// Cargar deudores
+// Cargar clientes
 $clientes = [];
 if (file_exists($csvFile)) {
     $file = fopen($csvFile, 'r');
@@ -34,77 +31,92 @@ if (file_exists($csvFile)) {
     fclose($file);
 }
 
-// Buscar cliente
+// Buscar cliente por teléfono
 $cliente = null;
-foreach ($clientes as $c) {
+foreach ($clientes as $i => $c) {
     if ($c['telefono'] === $senderBase) {
-        $cliente = $c;
+        $cliente = $clientes[$i];
         break;
     }
 }
 
-// Si no se encuentra el cliente, pedir el DNI
+// Si no se encuentra por teléfono, permitir identificar por DNI
+if (!$cliente && is_numeric($message) && strlen($message) >= 7) {
+    foreach ($clientes as $i => $c) {
+        if ($c['dni'] === $message) {
+            $clientes[$i]['telefono'] = $senderBase;
+            $cliente = $clientes[$i];
+            // Actualizar CSV con nuevo número
+            $f = fopen($csvFile, 'w');
+            foreach ($clientes as $line) {
+                fputcsv($f, [$line['nombre'], $line['dni'], $line['telefono']], ';');
+            }
+            fclose($f);
+            break;
+        }
+    }
+}
+
 if (!$cliente) {
     echo json_encode([
-        "reply" => "Hola. Para poder ayudarte, por favor escribí tu DNI (solo números). Si sos el titular, escribí: *Si soy*"
+        "reply" => "Hola. Para poder ayudarte, por favor escribí tu DNI (solo números)."
     ], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
-// Verificar confirmación previa de titularidad
+// Confirmación de titularidad
 $titularesConfirmados = [];
 if (file_exists($titularesFile)) {
-    $lines = file($titularesFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-    foreach ($lines as $line) {
-        $titularesConfirmados[] = trim($line);
-    }
+    $titularesConfirmados = file($titularesFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
 }
 $yaConfirmado = in_array($senderBase, $titularesConfirmados);
 
-// Ver si el mensaje actual confirma titularidad
 $esTitularAhora = strpos($message, 'soy el titular') !== false ||
                   strpos($message, 'si soy') !== false ||
                   strpos($message, 'soy yo') !== false ||
                   strpos($message, 'habla el titular') !== false;
 
-// Guardar confirmación si es necesario
 if ($esTitularAhora && !$yaConfirmado) {
     file_put_contents($titularesFile, $senderBase . "\n", FILE_APPEND);
     $yaConfirmado = true;
+
+    // Enviar mensaje partido
+    echo json_encode([
+        "reply" => "{$cliente['nombre']}, gracias por confirmar que sos el titular. Tu tarjeta presenta una deuda en instancia prelegal."
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
 }
 
+// Opciones válidas
 $opciones = ['1', '2', '3', '4'];
 
 // Funciones de respuesta
 function menuSinConfirmar() {
-    return "Hola, soy Carla del equipo de cobranzas de Naranja X. Para continuar necesito saber si estoy hablando con el titular de la cuenta. Por favor escribí: *Si soy* para avanzar.";
+    return "Hola, soy Yne de Naranja X. Para continuar necesito saber si estoy hablando con el titular de la cuenta. Por favor escribí: *Si soy* para avanzar.";
 }
-function menuConfirmado($nombre) {
-    return "Hola $nombre, gracias por confirmar que sos el titular. Tu tarjeta presenta una deuda en instancia prelegal. Elegí una opción para avanzar:\n\n1. Ver medios de pago\n2. Conocer plan disponible\n3. Ya pagué\n4. No reconozco la deuda";
+function menuOpciones() {
+    return "Elegí una opción para avanzar:\n\n1. Ver medios de pago\n2. Conocer plan disponible\n3. Ya pagué\n4. No reconozco la deuda";
 }
 function respuesta1() {
-    return "💳 *Medios de pago disponibles:*\n\n✅ Recomendado: *App Naranja X*\n- Tocá 'Pagar tu resumen'\n- Elegí 'Con tu dinero en cuenta'\n\n📺 Instructivo paso a paso:\nhttps://www.youtube.com/watch?v=nx170-vVAGs&list=PL-e3bYhlJzeYqvSdFgrqB_NjOXe0EFXmu\n\n🏦 Otras opciones:\n- Home Banking (Red Link o Banelco, usando el OCR de tu tarjeta Naranja Clásica que empieza con 5895)\n- Pago Fácil / Cobro Express / Aseguradora San Juan (1% recargo)\n\n❌ *No se acepta Rapipago* (requiere comprobante y reclamo).";
+    return "💳 *Medios de pago disponibles:*\n\n✅ Recomendado: *App Naranja X*\n- Tocá 'Pagar tu resumen'\n- Elegí 'Con tu dinero en cuenta'\n\n📺 Instructivo paso a paso:\nhttps://www.youtube.com/watch?v=nx170-vVAGs&list=PL-e3bYhlJzeYqvSdFgrqB_NjOXe0EFXmu\n\n🏦 Otras opciones:\n- Home Banking (Red Link o Banelco, usando el OCR de tu tarjeta Naranja Clásica que empieza con 5895)\n- Pago Fácil / Cobro Express / Aseguradora San Juan (1% recargo)\n\n❌ *No se acepta Rapipago*.";
 }
 function respuesta2() {
-    return "Estás en instancia *prelegal*. Para regularizar, podés acceder al *Plan de Pago Total*, que financia toda la deuda.\n\n📌 *¿Cómo pagás?* Usá la App Naranja X:\n\n1. Entrá a la app\n2. Tocá 'Pagar tu resumen'\n3. Elegí 'Con tu dinero en cuenta'\n4. Confirmá\n\n👉 Mirá cómo hacerlo en este video (17 segundos):\nhttps://www.youtube.com/watch?v=nx170-vVAGs&list=PL-e3bYhlJzeYqvSdFgrqB_NjOXe0EFXmu\n\n📲 Si tenés problemas con la app, podés usar:\n- Home Banking (Link/Banelco)\n- Pago Fácil / Cobro Express / Aseguradora San Juan\n\n⛔ Si no regularizás, la cuenta puede pasar a abogados con intereses y honorarios adicionales.";
+    return "Estás en instancia *prelegal*. Podés acceder al *Plan de Pago Total*, que financia toda la deuda.\n\n📌 *¿Cómo pagás?* Usá la App Naranja X:\n1. Entrá a la app\n2. Tocá 'Pagar tu resumen'\n3. Elegí 'Con tu dinero en cuenta'\n4. Confirmá\n\n📺 Tutorial:\nhttps://www.youtube.com/watch?v=nx170-vVAGs\n\n📲 Alternativas:\n- Home Banking (Link/Banelco)\n- Pago Fácil / Cobro Express / Aseguradora San Juan\n\n⛔ Si no regularizás, la cuenta puede pasar a abogados con intereses y honorarios.";
 }
 function respuesta3() {
-    return "🙌 Gracias por informarlo. Indicá por favor:\n- Monto pagado\n- Medio de pago\n- Fecha\nAsí actualizamos nuestros registros.\nTené en cuenta que podrían verse reflejados intereses en el próximo resumen.";
+    return "🙌 Gracias por informarlo. En breve actualizaremos nuestros registros.\nTené en cuenta que podrían verse reflejados intereses en el próximo resumen.";
 }
 function respuesta4() {
     return "Si no reconocés la deuda, podés iniciar un reclamo. Contactanos para más información.";
 }
-
-// Guardar en reporte
 function registrarReporte($dni, $telefono, $detalle) {
     $fechaHora = date('Y-m-d H:i:s');
-    $linea = "$dni;$fechaHora - $telefono $detalle\n";
-    file_put_contents(__DIR__ . '/reporte_chats.csv', $linea, FILE_APPEND);
+    file_put_contents(__DIR__ . '/reporte_chats.csv', "$dni;$fechaHora - $telefono $detalle\n", FILE_APPEND);
 }
 
-// Reglas de flujo
+// Flujo sin confirmación
 if (!$yaConfirmado && in_array($message, $opciones)) {
-    echo json_encode(["reply" => "Necesito que primero confirmes si sos el titular de la cuenta para poder darte información. Por favor escribí: *Si soy*"], JSON_UNESCAPED_UNICODE);
+    echo json_encode(["reply" => "Necesito que primero confirmes si sos el titular. Escribí: *Si soy*"], JSON_UNESCAPED_UNICODE);
     exit;
 }
 if (!$yaConfirmado && !in_array($message, $opciones)) {
@@ -112,7 +124,7 @@ if (!$yaConfirmado && !in_array($message, $opciones)) {
     exit;
 }
 
-// Ya confirmó titularidad
+// Ya confirmado
 switch ($message) {
     case '1':
     case 'ver medios de pago':
@@ -136,7 +148,7 @@ switch ($message) {
         registrarReporte($cliente['dni'], $senderBase, "indicó que no reconoce la deuda");
         break;
     default:
-        $respuesta = menuConfirmado($cliente['nombre']);
+        $respuesta = menuOpciones(); // Si responde algo fuera de menú, se reenvía menú
         break;
 }
 
