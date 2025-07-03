@@ -83,10 +83,10 @@ function menuConfirmado($nombre) {
     return "Hola $nombre, gracias por confirmar que sos el titular. Tu tarjeta presenta una deuda en instancia prelegal. Elegí una opción para avanzar:\n\n1. Ver medios de pago\n2. Conocer plan disponible\n3. Ya pagué\n4. No reconozco la deuda";
 }
 function respuesta1() {
-    return "Podés abonar por:\n- App Naranja X\n- Home Banking (Link / Banelco)\n- Pago Fácil / Cobro Express / Rapipago\n- CBU o débito automático\n\nRecordá que siempre se sumarán intereses en el resumen del mes siguiente.";
+    return "💳 *Medios de pago disponibles:*\n\n✅ Recomendado: *App Naranja X*\n- Tocá 'Pagar tu resumen'\n- Elegí 'Con tu dinero en cuenta'\n\n📺 Instructivo paso a paso:\nhttps://www.youtube.com/watch?v=nx170-vVAGs&list=PL-e3bYhlJzeYqvSdFgrqB_NjOXe0EFXmu\n\n🏦 Otras opciones:\n- Home Banking (Red Link o Banelco, usando el OCR de tu tarjeta Naranja Clásica que empieza con 5895)\n- Pago Fácil / Cobro Express / Aseguradora San Juan (1% recargo)\n\n❌ *No se acepta Rapipago* (requiere comprobante y reclamo).";
 }
 function respuesta2() {
-    return "Estás en instancia prelegal. Podés acceder al *Plan de Pago Total* o *Plan Excepción*, que financia toda la deuda pendiente.\n\n- El plástico queda inhabilitado hasta abonar el 60% del plan.\n- Los datos ya fueron informados al Banco Central.\n- Los débitos están suspendidos.\n- Siempre se aplicarán intereses en el próximo resumen.";
+    return "Estás en instancia *prelegal*. Para regularizar, podés acceder al *Plan de Pago Total*, que financia toda la deuda.\n\n📌 *¿Cómo pagás?* Usá la App Naranja X:\n\n1. Entrá a la app\n2. Tocá 'Pagar tu resumen'\n3. Elegí 'Con tu dinero en cuenta'\n4. Confirmá\n\n👉 Mirá cómo hacerlo en este video (17 segundos):\nhttps://www.youtube.com/watch?v=nx170-vVAGs&list=PL-e3bYhlJzeYqvSdFgrqB_NjOXe0EFXmu\n\n📲 Si tenés problemas con la app, podés usar:\n- Home Banking (Link/Banelco)\n- Pago Fácil / Cobro Express / Aseguradora San Juan\n\n⛔ Si no regularizás, la cuenta puede pasar a abogados con intereses y honorarios adicionales.";
 }
 function respuesta3() {
     return "🙌 Gracias por informarlo. Indicá por favor:\n- Monto pagado\n- Medio de pago\n- Fecha\nAsí actualizamos nuestros registros.\nTené en cuenta que podrían verse reflejados intereses en el próximo resumen.";
