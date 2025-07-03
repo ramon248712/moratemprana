@@ -86,7 +86,7 @@ $opciones = ['1', '2', '3', '4'];
 
 // Funciones de respuesta
 function menuCompleto($nombre) {
-    return "Hola $nombre 👋, gracias por confirmar que sos el titular. Tu tarjeta presenta una deuda en instancia prelegal.\n\nElegí una opción para avanzar:\n1. Ver medios de pago\n2. Conocer plan disponible\n3. Ya pagué\n4. No reconozco la deuda";
+    return "$nombre, gracias por confirmar que sos el titular. Tu tarjeta presenta una deuda en instancia prelegal.\n\nElegí una opción para avanzar:\n1. Ver medios de pago\n2. Conocer plan disponible\n3. Ya pagué\n4. No reconozco la deuda";
 }
 function menuSoloOpciones() {
     return "Elegí una opción para avanzar:\n1. Ver medios de pago\n2. Conocer plan disponible\n3. Ya pagué\n4. No reconozco la deuda";
@@ -108,7 +108,18 @@ function respuesta4() {
 }
 function registrarReporte($dni, $telefono, $detalle) {
     $fechaHora = date('Y-m-d H:i:s');
-    file_put_contents(__DIR__ . '/reporte_chats.csv', "$dni;$fechaHora - $telefono $detalle\n", FILE_APPEND);
+    $reporte = __DIR__ . '/reporte_chats.csv';
+
+    if (!file_exists($reporte)) {
+        file_put_contents($reporte, "DNI;FechaHora - Teléfono Detalle\n");
+    }
+
+    if (is_writable($reporte)) {
+        $linea = "$dni;$fechaHora - $telefono $detalle\n";
+        file_put_contents($reporte, $linea, FILE_APPEND);
+    } else {
+        error_log("No se pudo escribir en reporte_chats.csv");
+    }
 }
 
 // FLUJO
