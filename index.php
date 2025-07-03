@@ -13,7 +13,6 @@ if (strlen($senderBase) != 10) {
 }
 
 $csvFile       = __DIR__ . '/deudores.csv';
-$reporteChats  = __DIR__ . '/reporte_chats.csv';
 $titularesFile = __DIR__ . '/titulares_confirmados.csv';
 
 // Cargar clientes
@@ -107,19 +106,20 @@ function respuesta4() {
     return "Si no reconocés la deuda, podés iniciar un reclamo. Contactanos para más información.";
 }
 function registrarReporte($dni, $telefono, $detalle) {
-    $fechaHora = date('Y-m-d H:i:s');
-    $reporte = __DIR__ . '/reporte_chats.csv';
+    $url = 'https://script.google.com/macros/s/AKfycbzCVakOWHixMEcCSHpX7yTOpEB4-ZzZhDrdTqQ3R-0JFc0gVjE8uOPSRtc_YmojjqWd/exec';
 
-    if (!file_exists($reporte)) {
-        file_put_contents($reporte, "DNI;FechaHora - Teléfono Detalle\n");
-    }
+    $data = [
+        'dni' => $dni,
+        'telefono' => $telefono,
+        'accion' => $detalle
+    ];
 
-    if (is_writable($reporte)) {
-        $linea = "$dni;$fechaHora - $telefono $detalle\n";
-        file_put_contents($reporte, $linea, FILE_APPEND);
-    } else {
-        error_log("No se pudo escribir en reporte_chats.csv");
-    }
+    $ch = curl_init($url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+    curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+    curl_exec($ch);
+    curl_close($ch);
 }
 
 // FLUJO
