@@ -79,23 +79,20 @@ $esTitularAhora = strpos($message, 'soy el titular') !== false ||
 if ($esTitularAhora && !$yaConfirmado) {
     file_put_contents($titularesFile, $senderBase . "\n", FILE_APPEND);
     $yaConfirmado = true;
-
-    // Enviar mensaje partido
-    echo json_encode([
-        "reply" => "{$cliente['nombre']}, gracias por confirmar que sos el titular. Tu tarjeta presenta una deuda en instancia prelegal."
-    ], JSON_UNESCAPED_UNICODE);
-    exit;
 }
 
 // Opciones válidas
 $opciones = ['1', '2', '3', '4'];
 
 // Funciones de respuesta
+function menuCompleto($nombre) {
+    return "Hola $nombre 👋, gracias por confirmar que sos el titular. Tu tarjeta presenta una deuda en instancia prelegal.\n\nElegí una opción para avanzar:\n1. Ver medios de pago\n2. Conocer plan disponible\n3. Ya pagué\n4. No reconozco la deuda";
+}
+function menuSoloOpciones() {
+    return "Elegí una opción para avanzar:\n1. Ver medios de pago\n2. Conocer plan disponible\n3. Ya pagué\n4. No reconozco la deuda";
+}
 function menuSinConfirmar() {
     return "Hola, soy Yne de Naranja X. Para continuar necesito saber si estoy hablando con el titular de la cuenta. Por favor escribí: *Si soy* para avanzar.";
-}
-function menuOpciones() {
-    return "Elegí una opción para avanzar:\n\n1. Ver medios de pago\n2. Conocer plan disponible\n3. Ya pagué\n4. No reconozco la deuda";
 }
 function respuesta1() {
     return "💳 *Medios de pago disponibles:*\n\n✅ Recomendado: *App Naranja X*\n- Tocá 'Pagar tu resumen'\n- Elegí 'Con tu dinero en cuenta'\n\n📺 Instructivo paso a paso:\nhttps://www.youtube.com/watch?v=nx170-vVAGs&list=PL-e3bYhlJzeYqvSdFgrqB_NjOXe0EFXmu\n\n🏦 Otras opciones:\n- Home Banking (Red Link o Banelco, usando el OCR de tu tarjeta Naranja Clásica que empieza con 5895)\n- Pago Fácil / Cobro Express / Aseguradora San Juan (1% recargo)\n\n❌ *No se acepta Rapipago*.";
@@ -114,17 +111,24 @@ function registrarReporte($dni, $telefono, $detalle) {
     file_put_contents(__DIR__ . '/reporte_chats.csv', "$dni;$fechaHora - $telefono $detalle\n", FILE_APPEND);
 }
 
-// Flujo sin confirmación
+// FLUJO
+
 if (!$yaConfirmado && in_array($message, $opciones)) {
     echo json_encode(["reply" => "Necesito que primero confirmes si sos el titular. Escribí: *Si soy*"], JSON_UNESCAPED_UNICODE);
     exit;
 }
-if (!$yaConfirmado && !in_array($message, $opciones)) {
+if (!$yaConfirmado && !$esTitularAhora) {
     echo json_encode(["reply" => menuSinConfirmar()], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
-// Ya confirmado
+// Confirmado: mostrar menú completo si dice "si soy"
+if ($esTitularAhora) {
+    echo json_encode(["reply" => menuCompleto($cliente['nombre'])], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+// Acciones según mensaje
 switch ($message) {
     case '1':
     case 'ver medios de pago':
@@ -148,7 +152,7 @@ switch ($message) {
         registrarReporte($cliente['dni'], $senderBase, "indicó que no reconoce la deuda");
         break;
     default:
-        $respuesta = menuOpciones(); // Si responde algo fuera de menú, se reenvía menú
+        $respuesta = menuSoloOpciones(); // Repetir solo las opciones si no entiende
         break;
 }
 
